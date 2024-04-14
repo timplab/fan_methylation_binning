@@ -1,0 +1,16 @@
+library(tidyverse)
+library(cowplot)
+source('~/Code/yfan_nanopore/mdr/qc/barcode_plot_functions.R')
+
+datadir='/mithril/Data/Nanopore/projects/methbin/disco/barcode'
+samps=list.dirs(datadir, full.names=FALSE, recursive=FALSE)
+barcodesfile='~/Code/yfan_nanopore/mdr/disco/disco_barcodes.txt'
+barcodes=read_tsv(barcodesfile, 
+
+
+bc_cols=c('readname', '')
+
+for (i in samps) {
+    bcfile=file.path(datadir, i, paste0(i, '_barcodes.txt'))
+    
+

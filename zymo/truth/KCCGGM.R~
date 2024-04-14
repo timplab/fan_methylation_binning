@@ -1,0 +1,32 @@
+library(Biostrings)
+library(tidyverse)
+
+reffile='/uru/Data/Nanopore/projects/read_class/zymo/ref/zymo_all.fa'
+
+ref=readDNAStringSet(reffile)
+ecoliref=ref[4]
+names(ecoliref)=c('ecoli')
+
+##figure out if KCCGGM is actually the right motif here
+
+matchesG=vmatchPattern('GCCGGC', ecoliref)
+matchesT=vmatchPattern('TCCGGA', ecoliref)
+
+
+
+##grab bisulf data
+dbxdir='~/gdrive/mdr/zymo'
+projdir='/mithril/Data/Nanopore/projects/methbin/zymo/truth/bisulfite'
+datadir=file.path(projdir, 'bismark')
+i='ecoli'
+cxcols=c('chr', 'pos', 'strand', 'meth', 'unmeth', 'context', 'seq')
+
+
+cxfile=file.path(datadir, i, paste0(i, '_1_bismark_bt2_pe.CX_report.txt'))
+cx=read_tsv(cxfile, col_names=cxcols) %>%
+    filter(!grepl('tig', chr, fixed=TRUE)) %>%
+    filter((meth+unmeth)>15) %>%
+    mutate(methfrac=meth/(meth+unmeth))
+
+methylated=cx %>%
+    filter(methfrac>.5)

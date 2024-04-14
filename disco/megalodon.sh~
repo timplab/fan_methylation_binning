@@ -1,0 +1,12 @@
+#!/bin/bash
+
+ssddir=~/data/mdr/disco
+datadir=/mithril/Data/Nanopore/projects/methbin/disco
+
+ref=$datadir/ref/disco_refs.fasta
+if [ $1 == makeref ] ; then
+    cat $datadir/ref/*fa > $ref
+fi
+
+
+    

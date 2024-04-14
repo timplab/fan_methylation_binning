@@ -1,0 +1,17 @@
+library(tidyverse)
+
+projdir='/mithril/Data/Nanopore/projects/methbin/zymo'
+pbdir=file.path(projdir, 'truth/pacbio')
+smrtdir=file.path(pbdir, 'smrtanalysis/016')
+
+samps=c('016438','016439','016441','016442','016443','016444','016445','016446')
+
+covcols=c('chr', 'start', 'end', 'description', 'meancov', 'strand')
+
+for (i in samps) {
+    covfile=file.path(smrtdir, i, 'data/coverage.bed')
+    cov=read_tsv(file=covfile, col_names=covcols, skip=1) %>%
+        group_by(chr) %>%
+        summarise(total=mean(meancov)) %>%
+        filter(total>20)
+    cov$samp=i

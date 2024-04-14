@@ -1,0 +1,66 @@
+library(tidyverse)
+
+datadir='/mithril/Data/Nanopore/projects/methbin/disco'
+dbdir='/atium/Data/ref/bacteria'
+
+####look at blast results
+
+##read accession key
+faheaderfile=file.path(dbdir, 'all_bacteria_refs_faheaders.txt')
+accinfo=read_table2(faheaderfile, col_names=c('acc', 'genus', 'species'))
+
+##read blast results
+blastfile=file.path(datadir, 'blast_contigs', 'flye_blast.tsv')
+blastcols=c('tig', 'ref', 'ident', 'alen', 'mismatch', 'gaps', 'tigstart', 'tigend', 'refstart', 'refend', 'eval', 'bit')
+
+blast=read_tsv(blastfile, col_names=blastcols, comment='#') %>%
+    select(-c(mismatch, gaps, refstart, refend, eval, bit)) %>%
+    filter(alen>1000 & ident>90) %>%
+    rowwise() %>%
+    mutate(place=which(accinfo$acc==ref)) %>%
+    mutate(g=accinfo$genus[place], s=accinfo$species[place])
+
+##block=blast %>% filter(tig=='contig_1001' & ref=='NZ_WUQX01000001.1')
+merge_overlaps <- function(block) {
+    ##merge overlapping tig ranges
+    ##return total bases covered on tig by the ref
+    regions=tibble(start=block$tigstart,
+                   end=block$tigend)
+    numregions=dim(regions)[1]
+    newnum=0
+    
+    while (newnum!=numregions) {
+        newregions=regions[1,]
+        if (dim(regions)[1]>2) {
+            for (i in 2:dim(regions)[1]) {
+                newstart=regions$start[i]
+                newend=regions$end[i]
+                
+                ##check against each candidate region
+                for (j in 1:dim(newregions)[1]) {
+                    oldstart=newregions$start[j]
+                    oldend=newregions$end[j]
+                    if (newstart<oldstart) {
+                        if(newend>oldstart) {
+                            newregions$start[j]=newstart
+                        } else {
+                            newregions=bind_rows(newregions, tibble(start=newstart, end=newend))
+                        }
+                    } else {
+                        if(newend>oldend) {
+                            if(newstart<oldend) {
+                                newregions$end[j]=newend
+                            } else {
+                                newregions=bind_rows(newregions, tibble(start=newstart, end=newend))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        numregions=dim(regions)[1]
+        newnum=dim(newregions)[1]
+        regions=newregions
+    }
+    return(regions)
+}

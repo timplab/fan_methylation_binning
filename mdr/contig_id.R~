@@ -1,0 +1,48 @@
+library(tidyverse)
+library(Biostrings)
+source('~/Code/yfan_nanopore/mdr/disco/contig_id_functions.R')
+
+prefix='200708_mdr_stool16native_polished'
+projdir='/mithril/Data/Nanopore/projects/methbin/mdr'
+
+
+####plasmidfinder
+plasmidtsv=file.path(projdir, 'amr', paste0('200708_mdr_stool16native.plasmidfinder.tsv'))
+pf_cols=c('file', 'tig', 'start', 'end', 'strand', 'gene', 'covinfo', 'covmap', 'gaps', 'cov', 'ident', 'db', 'acc', 'resistance')
+plasmid=read_tsv(plasmidtsv, col_names=pf_cols, comment='#') %>%
+    select(c(-file, -strand, -covinfo, -covmap, -gaps, -db, -resistance)) %>%
+    filter(ident>99) %>%
+    mutate(overall=cov*ident) %>%
+    group_by(tig) %>%
+    mutate(max=max(overall)) %>%
+    ungroup() %>%
+    filter(overall==max) %>%
+    select(c(-max, -overall))
+
+
+####blast db info
+accinfofile=gzfile('/atium/Data/ref/ncbi/nt.acc2taxid.txt.gz')
+accinfo=read_table2(accinfofile, col_names=c('acc', 'taxid'))
+
+
+
+####blast
+blasttsv=file.path(projdir, 'blast_contigs', paste0(prefix, '.assembly.tsv'))
+blastcols=c('tig', 'ref', 'ident', 'alen', 'mismatch', 'gaps', 'tigstart', 'tigend', 'refstart', 'refend', 'eval', 'bit')
+blast=read_tsv(blasttsv, col_names=blastcols, comment='#') %>%
+    select(-c(mismatch, gaps, refstart, refend, eval, bit)) %>%
+    filter(alen>10000 & ident>98) %>%
+    filter(!tig %in% plasmid$tig)
+merged=blast %>%
+    group_by(tig, ref) %>%
+    do(merge_overlaps(.))
+
+mergelabel=merged %>%
+    group_by(tig, ref) %>%
+    summarise(totalbases=sum(end-start)) %>%
+    rowwise() %>%
+    mutate(place=which(ref==accinfo$acc)) %>%
+    mutate(taxid=accinfo$taxid[place])
+    
+
+

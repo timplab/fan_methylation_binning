@@ -1,0 +1,16 @@
+for i in cx:
+    chrom=i[0]
+    pos=i[1]
+    strand=i[2]
+    for motif in motifpos:
+	motifs=expand_motif([motif])
+	if strand=='+' :
+	    start=pos-motifpos[motif]
+	    end=start+len(motif)+1
+	    context=ref[chrom][start:end]
+	else:
+	    start=pos-len(motif)+motifpos[motif]-1
+	    end=start+len(motif)
+	    context=revcomp(ref[chrom][start:end])
+	if context in motifs:
+	    counted+=1

@@ -1,0 +1,97 @@
+library(tidyverse)
+
+projdir='/mithril/Data/Nanopore/projects/methbin'
+prefix='200708_mdr_stool16native_nohuman'
+datadir=file.path(projdir, 'paperfigs/nohuman')
+
+dbxdir='~/gdrive/mdr/paperfigs/figs_nohuman'
+
+allOverlaps <- function(x) {
+    ##x is a block of mummer output grouped by rname and bin
+    ##returns one row tibble with [rname, bin, total cov]
+    coveredpos=c()
+    for (i in 1:dim(x)[1]) {
+        coveredpos=c(coveredpos, seq(x$rstart[i], x$rend[i], by=1))
+    }
+    totcov=length(unique(coveredpos))
+    return(tibble(rname=x$rname[1], bin=x$bin[1], rlen=x$rlen[1], total_rcov=100*totcov/x$rlen[1]))
+    ##return(totcov/x$rlen[1])
+}
+
+
+    
+####assign contigs to bins based on the mummer
+mumfile=file.path(datadir, 'clin_mummer', 'asm_hiC.mcoords')
+mum1file=file.path(datadir, 'clin_mummer', 'asm_hiC.1coords')
+mumcols=c('rstart', 'rend', 'qstart', 'qend', 'ralen', 'qalen','ident', 'rlen', 'qlen', 'rcov', 'qcov', 'rname', 'qname')
+mum=rbind(read_tsv(mumfile, col_names=mumcols), read_tsv(mum1file, col_names=mumcols)) %>%
+    rowwise() %>%
+    mutate(bin=strsplit(qname, '.', fixed=TRUE)[[1]][1]) %>%
+    ungroup() %>%
+    group_by(rname, bin) %>%
+    do(allOverlaps(.)) %>%
+    filter(total_rcov>20)
+
+mumkey=mum %>%
+    group_by(rname) %>%
+    filter(n()==1)
+
+mummultiple=mum %>%
+    group_by(rname) %>%
+    filter(n()>1) %>%
+    summarise(all_bins=paste0(bin, collapse=','), all_rcov=paste0(total_rcov, collapse=','))
+
+mumkeyfile=file.path(datadir, 'tigs2bins.tsv')
+write_tsv(mumkey, mumkeyfile)
+multikeyfile=file.path(datadir, 'tigs2bins_multi.tsv')
+write_tsv(mummultiple, multikeyfile)
+
+
+CATfile=file.path(datadir, 'contig_id/CAT/200708_mdr_stool16native_nohuman.CAT.names_official.txt')
+phyloranks=c('superkingdom', 'phylum', 'class', 'order', 'family', 'genus', 'species')
+CATcols=c('tig', 'classification', 'reason', 'lineage', 'lineage_scores', phyloranks)
+CAT=read_tsv(CATfile)
+names(CAT)=CATcols
+
+BATfile=file.path(projdir, 'mdr/hiC/bin_id/BAT_single/200708_mdr_stool16native.BAT.names_official.txt')
+BAT=read_tsv(BATfile)
+names(BAT)=CATcols
+
+
+tiginfo=NULL
+for (i in 1:dim(mum)[1]) {
+    tig=mum$rname[i]
+    bin=mum$bin[i]
+
+    infobin=BAT[BAT$tig==paste0(bin, '.fasta'),][-(1:5)] %>% slice(1) %>% unlist(., use.names=FALSE)
+    infotig=CAT[CAT$tig==tig,][-(1:5)] %>% slice(1) %>% unlist(., use.names=FALSE)
+    allinfo=tibble(bin=infobin, tig=infotig) %>%
+        rowwise() %>%
+        mutate(bin=strsplit(bin, ':', fixed=TRUE)[[1]][1]) %>%
+        mutate(tig=strsplit(tig, ':', fixed=TRUE)[[1]][1])
+    allinfo[is.na(allinfo)]='not applicable'
+    
+    binindex=sum(!allinfo$bin=='no support')
+    tigindex=sum(!allinfo$tig=='no support')
+    
+    binleaf=allinfo$bin[binindex]
+    tigleaf=allinfo$tig[tigindex]
+
+    
+    if (length(tigleaf)==0){
+        tigleaf='none'
+    }
+    if (length(binleaf)==0){
+        binleaf='none'
+    }
+    
+    tiginfo=bind_rows(tiginfo, tibble(tig=tig, bin=bin, tigleaf=tigleaf, binleaf=binleaf))
+}
+
+names(mum)=c('tig', 'bin', 'rlen', 'total_rcov')
+
+fullinfo=full_join(mum, tiginfo, by=c('tig', 'bin')) %>%
+    arrange(bin)
+
+speciesfile=file.path(datadir, 'tigbin_species.tsv')
+write_tsv(fullinfo, speciesfile)

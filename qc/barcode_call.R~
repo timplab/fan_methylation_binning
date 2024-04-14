@@ -1,0 +1,20 @@
+library(tidyverse)
+library(BMS)
+
+datadir='/mithril/Data/Nanopore/projects/methbin/barcode/qc'
+testfile=file.path(datadir, 'nebdcm_barcodes_filtered_10_motifs.txt')
+
+#change this accordingly when barcoder bug is fixed
+##bc_cols=c('readname', 'chrname', 'start', 'end', 'mapq', 'chrname2', 'GATC', 'CCWGG', 'ATCGAT', 'GTCGAC', 'CTCCAG', 'CTKVAG')
+bc_cols=c('readname', 'chrname', 'start', 'end', 'mapq', 'GATC', 'GANTC', 'CCWGG', 'GCNGC')
+bcinfo=read_tsv(testfile, col_names=bc_cols) %>%
+    select(-start, -end, -mapq)
+
+call_part_avg <- function(bcinfo, thresh) {
+    ##thresh is expressed as +/- proportion of average
+    ##output [readname, chrname, bin_barcode]
+    scores=bcinfo[,-(1:2)]
+    minscores=rowMeans(scores)*thresh
+    test=scores>minscores
+
+    barcode=paste0(as.character(as.numeric(test)), collapse='')

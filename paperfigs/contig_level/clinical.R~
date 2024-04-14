@@ -1,0 +1,44 @@
+library(tidyverse)
+
+projdir='/mithril/Data/Nanopore/projects/methbin'
+prefix='200708_mdr_stool16native_asm'
+datadir=file.path(projdir, 'paperfigs/contig_level')
+
+dbxdir='~/gdrive/mdr/paperfigs/contig_level'
+
+methfile=file.path(datadir, 'clin_barocdes_methcalls.csv')
+methcols=c('chrom', 'pos', 'strand', 'prob', 'motif', 'base', 'meth')
+meth=read_csv(methfile, col_names=methcols) %>%
+    group_by(chrom, pos, strand, motif) %>%
+    summarise(methnum=sum(meth=='m'), umethnum=sum(meth=='u')) %>%
+    mutate(methfrac=methnum/(methnum+umethnum))
+
+x=meth %>%
+    filter(chrom=='contig_10') %>%
+    filter(motif=='GANTC') %>%
+    filter(sum(methnum+umethnum)>5)
+
+findMethFreq <- function(x) {
+    ##collapses called meth into methfreq.
+    ##x is meth df above, grouped by chrom and motif
+
+    motiflen=nchar(x$motif[1])
+    
+    motifpos=NULL
+    for (i in x$pos) {
+        diffs=abs(x$pos-i)
+        motifgroup=x[diffs<=motiflen,] %>%
+            arrange(-methfrac) %>%
+            mutate(totcalls=methnum+umethnum) %>%
+            arrange(-totcalls)
+        motifpos=bind_rows(motifpos, motifgroup[1,])
+    }
+
+    motifpos=unique(motifpos) %>%
+        select(-totcalls)
+    return(motifpos)
+}
+        
+mathmex=NULL
+
+

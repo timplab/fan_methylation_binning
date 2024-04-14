@@ -1,0 +1,54 @@
+library(tidyverse)
+
+projdir='/mithril/Data/Nanopore/projects/methbin/zymo'
+prefix='20190809_zymo_control'
+datadir=file.path(projdir, 'contig_agg', prefix)
+filterfile=file.path(datadir, paste0(prefix,'.curate_filter.csv'))
+
+##read motif info
+cmethfile=file.path(projdir, 'truth/bisulfite/zymo_cmeth.csv')
+cmeth=read_csv(cmethfile)
+amethfile=file.path(projdir, 'truth/pacbio/zymo_ameth.csv')
+ameth=read_csv(amethfile)
+methinfo=bind_rows(cmeth,ameth) %>%
+    group_by(motif, pos) %>%
+    summarise(num=n())
+    
+nametochrfile='~/Code/yfan_nanopore/mdr/zymo/truth/chrlist_withlabels.txt'
+chrlabels=read_table2(nametochrfile, col_names=c('chr', 'label'))
+
+
+
+##read filtered megalodon output
+filter_cols=c('chrom', 'pos', 'strand', 'prob', 'motif', 'base', 'meth')
+filter=read_csv(filterfile, col_names=filter_cols) %>%
+    filter(!grepl('tig0', chrom, fixed=TRUE)) %>%
+    group_by(chrom, pos, strand, motif) %>%
+    summarise(methnum=sum(meth=='m'), umethnum=sum(meth=='u')) %>%
+    mutate(methfrac=methnum/(methnum+umethnum))
+
+
+##isolate bases that are supposed to be methylated
+basemeth=NULL
+chrs=names(table(filter$chrom))
+for (i in chrs) {
+    label=chrlabels$label[chrlabels$chr==i]
+
+    speciesmeth=filter %>%
+        filter(chrom==i)
+
+    for (j in dim(methinfo)[1]) {
+        qmotif=methinfo$motif[j]
+        motifpos=methinfo$pos[j]
+        motiflen=nchar(qmotif)
+        
+        speciesmotif=speciesmeth %>%
+            filter(motif==qmotif)
+
+        if (dim(speciesmotif)[1]>0) {
+            basepos=seq(motifpos, dim(speciesmotif)[1], motiflen)
+            methmotif=speciesmotif[basepos,]
+            basemeth=bind_rows(basemeth, methmotif)
+        }
+    }
+}
